@@ -139,7 +139,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
 
-def create_fit_card(outfit: str, new_item: dict) -> str:
+def create_fit_card(outfit: str, new_item: dict, wardrobe_empty: bool = False) -> str:
     # Step 1: guard against empty outfit string
     if not outfit or not outfit.strip():
         title = new_item.get("title", "this piece")
@@ -151,17 +151,27 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     price    = new_item.get("price", "")
     platform = new_item.get("platform", "")
 
+    wardrobe_note = (
+        "The user has no existing wardrobe, so write the caption as if they're "
+        "suggesting how to style it — not as if they already own those pieces. "
+        "Use language like 'would look great with' or 'styling it with' instead of 'I paired it with my'."
+        if wardrobe_empty else
+        "The user owns the wardrobe pieces mentioned — write as if they already styled the outfit."
+    )
+
     prompt = (
         f"Write a 2-4 sentence Instagram caption for this thrifted outfit.\n\n"
         f"Thrifted item: {title}\n"
         f"Price: ${price}\n"
         f"Platform: {platform}\n"
         f"Outfit: {outfit}\n\n"
+        f"{wardrobe_note}\n\n"
         f"The caption should:\n"
         f"- Sound casual and authentic, like a real person posting an OOTD\n"
         f"- Mention the item name, price, and platform once each, naturally\n"
         f"- Capture the specific vibe of the outfit (not generic)\n"
         f"- NOT sound like a product description or an ad\n"
+        f"- Only reference items explicitly mentioned in the Outfit above — do NOT invent clothing items\n"
         f"- Be 2-4 sentences only, no hashtags"
     )
 
