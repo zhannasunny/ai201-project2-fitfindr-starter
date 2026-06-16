@@ -143,8 +143,49 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
     Before writing code, fill in the Tool 2 section of planning.md.
     """
-    # Replace this with your implementation
-    return ""
+    client = _get_groq_client()
+
+    item_summary = (
+        f"{new_item.get('title', 'item')} — "
+        f"{new_item.get('description', '')} "
+        f"(style tags: {', '.join(new_item.get('style_tags', []))}; "
+        f"colors: {', '.join(new_item.get('colors', []))})"
+    )
+
+    wardrobe_items = wardrobe.get("items", [])
+
+    if not wardrobe_items:
+        # Empty wardrobe — ask for general styling advice
+        prompt = (
+            f"I just thrifted this item: {item_summary}\n\n"
+            f"I don't have any other clothes to pair it with yet. "
+            f"Suggest 1-2 complete outfits from scratch that would work well "
+            f"with this piece. Be specific about what types of items, colors, "
+            f"and shoes would complement it. Keep it casual and practical."
+        )
+    else:
+        # Format wardrobe items into a readable list
+        wardrobe_summary = "\n".join(
+            f"- {w.get('name', 'item')} ({w.get('color', '')})"
+            for w in wardrobe_items
+        )
+        prompt = (
+            f"I just thrifted this item: {item_summary}\n\n"
+            f"Here's what I already own:\n{wardrobe_summary}\n\n"
+            f"Suggest 1-2 complete outfit combinations using the thrifted item "
+            f"paired with specific pieces from my wardrobe. Only use items from "
+            f"the wardrobe list above — don't invent new pieces. "
+            f"Be specific and keep the suggestions practical."
+        )
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300,
+    )
+
+    result = response.choices[0].message.content.strip()
+    return result if result else f"Try pairing this {new_item.get('title', 'item')} with neutral basics."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
