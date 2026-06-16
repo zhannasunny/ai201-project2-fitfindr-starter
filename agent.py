@@ -18,7 +18,19 @@ Usage (once implemented):
     print(result["error"])   # None on success
 """
 
+import os
+import json
+from dotenv import load_dotenv
+from groq import Groq
 from tools import search_listings, suggest_outfit, create_fit_card
+
+load_dotenv()
+
+def _get_groq_client():
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY not set.")
+    return Groq(api_key=api_key)
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -46,6 +58,47 @@ def _new_session(query: str, wardrobe: dict) -> dict:
 
 
 # ── planning loop ─────────────────────────────────────────────────────────────
+
+def _parse_query(query: str) -> dict:
+    """
+    Use the LLM to extract description, size, and max_price from a
+    natural language query. Returns a dict with those three keys.
+    """
+    client = _get_groq_client()
+
+    prompt = (
+        f"Extract search parameters from this clothing query: '{query}'\n\n"
+        f"Return ONLY a JSON object with these three keys:\n"
+        f"- description (str): what item the user is looking for\n"
+        f"- size (str or null): clothing size if mentioned, else null\n"
+        f"- max_price (float or null): maximum price if mentioned, else null\n\n"
+        f"Example: 'vintage graphic tee under $30 size M' → "
+        f'{{ "description": "vintage graphic tee", "size": "M", "max_price": 30.0 }}\n\n'
+        f"Return only the JSON, no explanation."
+    )
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=100,
+        temperature=0.0,  # deterministic — we want consistent parsing
+    )
+
+    raw = response.choices[0].message.content.strip()
+
+    try:
+        # Strip markdown code fences if the LLM added them
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Fallback: treat the whole query as a description
+        parsed = {"description": query, "size": None, "max_price": None}
+
+    return {
+        "description": parsed.get("description", query),
+        "size":        parsed.get("size", None),
+        "max_price":   parsed.get("max_price", None),
+    }
 
 def run_agent(query: str, wardrobe: dict) -> dict:
     """
@@ -93,8 +146,49 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     of planning.md — your implementation should match what you described there.
     """
     # TODO: implement the planning loop
+    # Step 1: initialize session
     session = _new_session(query, wardrobe)
-    session["error"] = "Planning loop not yet implemented."
+
+    # Step 2: parse the query
+    session["parsed"] = _parse_query(query)
+    description = session["parsed"]["description"]
+    size        = session["parsed"]["size"]
+    max_price   = session["parsed"]["max_price"]
+
+    print(f"[agent] Parsed → description={description!r}, size={size}, max_price={max_price}")
+
+    # Step 3: search listings
+    session["search_results"] = search_listings(description, size, max_price)
+
+    if not session["search_results"]:
+        session["error"] = (
+            f"No listings found for '{description}'"
+            + (f" in size {size}" if size else "")
+            + (f" under ${max_price}" if max_price else "")
+            + ". Try adjusting your size or price."
+        )
+        return session
+
+    # Step 4: select top result
+    session["selected_item"] = session["search_results"][0]
+    print(f"[agent] Selected → {session['selected_item']['title']}")
+
+    # Step 5: suggest outfit
+    session["outfit_suggestion"] = suggest_outfit(
+        session["selected_item"],
+        session["wardrobe"],
+    )
+    print(f"[agent] Outfit suggestion generated")
+
+    # Step 6: create fit card
+    session["fit_card"] = create_fit_card(
+        session["outfit_suggestion"],
+        session["selected_item"],
+        wardrobe_empty=not session["wardrobe"].get("items"),
+    )
+    print(f"[agent] Fit card generated")
+
+    # Step 7: return session
     return session
 
 
