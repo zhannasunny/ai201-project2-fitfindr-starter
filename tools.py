@@ -69,8 +69,51 @@ def search_listings(
 
     Before writing code, fill in the Tool 1 section of planning.md.
     """
-    # Replace this with your implementation
-    return []
+    # 1. Load all listings
+    listings = load_listings()
+
+    # 2. Filter by max_price and size (if provided)
+    candidates = []
+    for listing in listings:
+        if max_price is not None and listing["price"] > max_price:
+            continue
+        if size is not None and size.lower() not in listing["size"].lower():
+            continue
+        candidates.append(listing)
+
+    # 3. Score each remaining listing by keyword overlap with `description`
+    keywords = set(description.lower().split())
+
+    def score(listing: dict) -> int:
+        tags_expanded = " ".join(
+            word for tag in listing.get("style_tags", []) for word in tag.split()
+        )
+        searchable = " ".join([
+            listing.get("title", "") or "",
+            listing.get("description", "") or "",
+            listing.get("category", "") or "",
+            listing.get("brand", "") or "",
+            tags_expanded,
+            " ".join(listing.get("colors", [])),
+            listing.get("condition", "") or "",
+        ]).lower()
+        tokens = set(searchable.split())
+        base_score = len(keywords & tokens)
+
+        # Bonus: extra point for each keyword that appears in the title
+        title_tokens = set((listing.get("title", "") or "").lower().split())
+        title_bonus = len(keywords & title_tokens)
+
+        return base_score + title_bonus
+
+    scored = [(score(listing), listing) for listing in candidates]
+
+    # 4. Drop listings with a score of 0
+    scored = [(s, item) for s, item in scored if s > 0]
+
+    # 5. Sort by score descending and return listing dicts
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [item for _, item in scored]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
