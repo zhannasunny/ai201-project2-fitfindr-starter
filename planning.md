@@ -118,7 +118,7 @@ For each tool, describe the specific failure mode you're handling and what the a
      sketch are all fine. You'll share this diagram with an AI tool when asking it to implement
      the planning loop and each individual tool. -->
 
-'''mermaid
+```mermaid
 flowchart TB
     A["User query"] --> B["Extract wardrobe info from query\nsession['wardrobe'] = extracted items"]
     B --> C["search_listings(description, size, max_price)"]
@@ -137,7 +137,7 @@ flowchart TB
     M -- no --> O["session['fit_card'] = caption"]
     N --> P["Return to user"]
     O --> P
-'''
+```
 
 ---
 
